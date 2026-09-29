@@ -9,6 +9,7 @@ public record AppProperties(
         String baseUrl,
         int codeLength,
         List<Shard> shards,
+        String mysqlUrl,
         int shardPoolSize,
         Cache cache,
         Events events,

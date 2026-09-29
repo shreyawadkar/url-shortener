@@ -21,6 +21,10 @@ app:
   base-url: ${BASE_URL:${RENDER_EXTERNAL_URL:http://localhost:8080}}
   code-length: 7
 
+  # One hosted MySQL server (mysql://user:pass@host:port/db) split into databases shard0..shard2.
+  # When set, it replaces the per-shard URLs below.
+  mysql-url: ${MYSQL_URL:}
+
   # Three MySQL shards. Defaults are in-memory H2 databases in MySQL mode so the app runs with zero setup.
   shards:
     - url: ${SHARD0_URL:jdbc:h2:mem:shard0;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}

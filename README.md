@@ -53,13 +53,14 @@ docker compose up --build    # full stack: 3× MySQL, Redis, Kafka, app
 java loadtest/LoadTest.java http://localhost:8080 32 30   # base URL, threads, seconds
 ```
 
-Mix is 90% redirects / 10% creates over 1,000 seeded links. Measured on an Apple-silicon laptop in zero-dependency mode (in-memory shards): **~39,900 req/s, p50 0.65 ms, p99 2.5 ms, 0 errors** over 798k requests. Numbers against networked MySQL/Redis will be lower, so rerun it against your deployment.
+Mix is 90% redirects / 10% creates over 1,000 seeded links. Measured on an Apple-silicon laptop in zero-dependency mode (in-memory shards): **~39,900 req/s, p50 0.65 ms, p99 2.5 ms, 0 errors** over 798k requests. With real MySQL 3-shard + Redis on the same laptop: **~24,000 req/s, p50 1.1 ms, p99 3.7 ms, 0 errors** over 480k requests. Numbers against networked MySQL/Redis will be lower, so rerun it against your deployment.
 
 ## Configuration
 
 | Env var | Purpose |
 |---|---|
 | `BASE_URL` | Public base for generated short links |
+| `MYSQL_URL` | One hosted MySQL server, `mysql://user:pass@host:port/db` (e.g. Aiven's Service URI). Creates databases `shard0`–`shard2` on it and overrides the per-shard URLs below. |
 | `SHARD0_URL`, `SHARD1_URL`, `SHARD2_URL` | JDBC URLs, e.g. `jdbc:mysql://host:3306/shard0?sslMode=REQUIRED` |
 | `DB_USER`, `DB_PASSWORD` | Shared shard credentials (or per shard: `SHARDn_USER` / `SHARDn_PASSWORD`) |
 | `REDIS_URL` | `redis://` or `rediss://user:pass@host:port` |
@@ -67,7 +68,7 @@ Mix is 90% redirects / 10% creates over 1,000 seeded links. Measured on an Apple
 
 ## Deploy
 
-**Free (Render):** New → Blueprint → select this repo. [render.yaml](render.yaml) builds the Dockerfile on Render's free plan. Add free-tier MySQL (e.g. Aiven), Redis (e.g. Upstash) and Kafka by setting the env vars above.
+**Free (Render):** New → Blueprint → select this repo. [render.yaml](render.yaml) builds the Dockerfile on Render's free plan. For persistent links set two env vars: `MYSQL_URL` (Aiven free MySQL Service URI) and `REDIS_URL` (Upstash free Redis `rediss://` URL).
 
 **AWS (Terraform):**
 ```bash

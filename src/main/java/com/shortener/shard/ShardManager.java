@@ -22,7 +22,9 @@ public class ShardManager {
     private final ShardRouter router;
 
     public ShardManager(AppProperties props) {
-        List<AppProperties.Shard> configs = props.shards();
+        List<AppProperties.Shard> configs = props.mysqlUrl() != null && !props.mysqlUrl().isBlank()
+                ? MysqlUri.toShards(props.mysqlUrl(), props.shards().size())
+                : props.shards();
         if (configs == null || configs.isEmpty()) {
             throw new IllegalStateException("At least one shard must be configured under app.shards");
         }
@@ -36,7 +38,7 @@ public class ShardManager {
             hc.setPassword(cfg.password());
             hc.setMaximumPoolSize(props.shardPoolSize());
             hc.setMinimumIdle(Math.min(2, props.shardPoolSize()));
-            hc.setConnectionTimeout(3_000);
+            hc.setConnectionTimeout(10_000);
             HikariDataSource ds = new HikariDataSource(hc);
 
             ResourceDatabasePopulator schema = new ResourceDatabasePopulator(new ClassPathResource("schema.sql"));
