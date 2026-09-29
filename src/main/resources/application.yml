@@ -1,0 +1,75 @@
+server:
+  port: ${PORT:8080}
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+    accept-count: 500
+
+spring:
+  application:
+    name: url-shortener
+  autoconfigure:
+    # Shards, Redis and Kafka are wired manually (see com.shortener.config) so each can be switched on by env var.
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
+app:
+  base-url: ${BASE_URL:http://localhost:8080}
+  code-length: 7
+
+  # Three MySQL shards. Defaults are in-memory H2 databases in MySQL mode so the app runs with zero setup.
+  shards:
+    - url: ${SHARD0_URL:jdbc:h2:mem:shard0;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}
+      username: ${SHARD0_USER:${DB_USER:sa}}
+      password: ${SHARD0_PASSWORD:${DB_PASSWORD:}}
+    - url: ${SHARD1_URL:jdbc:h2:mem:shard1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}
+      username: ${SHARD1_USER:${DB_USER:sa}}
+      password: ${SHARD1_PASSWORD:${DB_PASSWORD:}}
+    - url: ${SHARD2_URL:jdbc:h2:mem:shard2;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}
+      username: ${SHARD2_USER:${DB_USER:sa}}
+      password: ${SHARD2_PASSWORD:${DB_PASSWORD:}}
+  shard-pool-size: ${SHARD_POOL_SIZE:10}
+
+  cache:
+    # "redis" when REDIS_URL is set (e.g. rediss://default:pass@host:6379), otherwise an in-process Caffeine cache.
+    redis-url: ${REDIS_URL:}
+    ttl-seconds: 3600
+    negative-ttl-seconds: 60
+    local-max-size: 100000
+
+  events:
+    # Kafka is used when KAFKA_BOOTSTRAP_SERVERS is set, otherwise click events go through an in-process bus.
+    kafka-bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:}
+    kafka-username: ${KAFKA_USERNAME:}
+    kafka-password: ${KAFKA_PASSWORD:}
+    kafka-sasl-mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
+    topic: ${KAFKA_TOPIC:click-events}
+    partitions: 3
+    consumer-concurrency: 3
+
+  clicks:
+    flush-interval-ms: 1000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        shortener.redirect: true
+      percentiles:
+        shortener.redirect: 0.5,0.95,0.99
+        shortener.create: 0.5,0.95,0.99
+
+logging:
+  level:
+    org.apache.kafka: WARN

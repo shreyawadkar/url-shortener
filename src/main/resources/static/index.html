@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shortly — Scalable URL Shortener</title>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --line:#262b36; --text:#e7e9ee; --muted:#8b93a7; --accent:#6ea8fe; --ok:#4ade80; --err:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:760px; margin:0 auto; padding:40px 16px 60px; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 28px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:18px; }
+  h2 { font-size:15px; margin:0 0 12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  form { display:flex; flex-wrap:wrap; gap:10px; }
+  input { flex:1 1 200px; min-width:0; background:#0c0e12; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:10px 12px; font:inherit; }
+  input.small { flex:0 1 150px; }
+  button { background:var(--accent); color:#0b1020; border:0; border-radius:8px; padding:10px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  .out { margin-top:14px; font-size:14px; word-break:break-all; }
+  .out a { color:var(--accent); font-weight:600; font-size:17px; }
+  .err { color:var(--err); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--muted); font-size:12px; margin-right:6px; }
+  .pill b { color:var(--ok); font-weight:600; }
+  dl { display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:12px 0 0; font-size:14px; }
+  dt { color:var(--muted); }
+  dd { margin:0; word-break:break-all; }
+  footer { color:var(--muted); font-size:13px; text-align:center; }
+  footer a { color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Shortly</h1>
+  <p class="sub">A distributed URL shortener: Spring Boot, 3 MySQL shards, Redis cache, Kafka click stream.</p>
+
+  <section class="card">
+    <h2>Shorten a link</h2>
+    <form id="create">
+      <input id="url" type="url" placeholder="https://example.com/some/very/long/path" required>
+      <input id="alias" class="small" placeholder="custom alias (optional)">
+      <button>Shorten</button>
+    </form>
+    <div id="createOut" class="out"></div>
+  </section>
+
+  <section class="card">
+    <h2>Link stats</h2>
+    <form id="stats">
+      <input id="code" placeholder="short code, e.g. aZ3kP9q" required>
+      <button class="ghost">Look up</button>
+    </form>
+    <div id="statsOut" class="out"></div>
+  </section>
+
+  <section class="card">
+    <h2>Cluster</h2>
+    <div id="mode"></div>
+    <table>
+      <thead><tr><th>Shard</th><th class="num">URLs</th><th class="num">Clicks</th><th class="num">Active conns</th><th class="num">Queue</th></tr></thead>
+      <tbody id="shards"><tr><td colspan="5">Loading…</td></tr></tbody>
+    </table>
+  </section>
+
+  <footer>API: <code>POST /api/v1/urls</code> · <code>GET /{code}</code> · <a href="/api/v1/system">/api/v1/system</a> · <a href="/actuator/metrics/shortener.redirect">redirect latency</a></footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+$('create').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = { url: $('url').value };
+  if ($('alias').value.trim()) body.customAlias = $('alias').value.trim();
+  const r = await fetch('/api/v1/urls', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) { $('createOut').innerHTML = `<span class="err">${esc(j.error)}</span>`; return; }
+  $('createOut').innerHTML = `<a href="${esc(j.shortUrl)}" target="_blank" rel="noopener">${esc(j.shortUrl)}</a>
+    <button class="ghost" id="copy" type="button" style="margin-left:8px;padding:4px 10px">Copy</button>
+    <div style="color:var(--muted);margin-top:6px">stored on shard ${j.shard}</div>`;
+  $('copy').onclick = () => navigator.clipboard.writeText(j.shortUrl);
+  $('code').value = j.code;
+  loadSystem();
+});
+
+$('stats').addEventListener('submit', async e => {
+  e.preventDefault();
+  const r = await fetch(`/api/v1/urls/${encodeURIComponent($('code').value.trim())}/stats`);
+  if (!r.ok) { $('statsOut').innerHTML = '<span class="err">Not found</span>'; return; }
+  const j = await r.json();
+  $('statsOut').innerHTML = `<dl>
+    <dt>Target</dt><dd>${esc(j.longUrl)}</dd>
+    <dt>Clicks</dt><dd>${j.clicks}</dd>
+    <dt>Shard</dt><dd>${j.shard}</dd>
+    <dt>Created</dt><dd>${esc(new Date(j.createdAt).toLocaleString())}</dd>
+    <dt>Last click</dt><dd>${j.lastAccessedAt ? esc(new Date(j.lastAccessedAt).toLocaleString()) : '—'}</dd>
+    <dt>Expires</dt><dd>${j.expiresAt ? esc(new Date(j.expiresAt).toLocaleString()) : 'never'}</dd></dl>`;
+});
+
+async function loadSystem() {
+  try {
+    const j = await (await fetch('/api/v1/system')).json();
+    $('mode').innerHTML = `<p><span class="pill">cache <b>${esc(j.cache)}</b></span><span class="pill">events <b>${esc(j.events)}</b></span></p>`;
+    $('shards').innerHTML = j.shards.map(s => `<tr><td>shard-${s.shard}</td><td class="num">${s.urls}</td><td class="num">${s.clicks}</td><td class="num">${s.activeConnections}</td><td class="num">${s.workerQueue}</td></tr>`).join('');
+  } catch { $('shards').innerHTML = '<tr><td colspan="5" class="err">Unavailable</td></tr>'; }
+}
+loadSystem();
+setInterval(loadSystem, 5000);
+</script>
+</body>
+</html>

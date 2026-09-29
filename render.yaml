@@ -1,0 +1,30 @@
+# Render Blueprint: New > Blueprint > pick this repo.
+# Runs out of the box with in-memory shards/cache/events. Set the optional env vars
+# (in the Render dashboard) to switch on real MySQL shards, Redis and Kafka.
+services:
+  - type: web
+    name: url-shortener
+    runtime: docker
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: BASE_URL
+        sync: false          # e.g. https://url-shortener-xxxx.onrender.com
+      - key: SHARD0_URL
+        sync: false          # jdbc:mysql://host:port/shard0?sslMode=REQUIRED
+      - key: SHARD1_URL
+        sync: false
+      - key: SHARD2_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: REDIS_URL
+        sync: false          # rediss://default:<password>@<host>:6379
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: KAFKA_USERNAME
+        sync: false
+      - key: KAFKA_PASSWORD
+        sync: false

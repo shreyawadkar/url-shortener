@@ -1,0 +1,49 @@
+# Full local stack: 3 MySQL shards, Redis, Kafka (KRaft), and the app.
+#   docker compose up --build
+services:
+  mysql-shard0: &mysql
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: shortener
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-proot"]
+      interval: 5s
+      retries: 20
+  mysql-shard1: *mysql
+  mysql-shard2: *mysql
+
+  redis:
+    image: redis:7-alpine
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 3
+
+  app:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      BASE_URL: http://localhost:8080
+      SHARD0_URL: jdbc:mysql://mysql-shard0:3306/shortener
+      SHARD1_URL: jdbc:mysql://mysql-shard1:3306/shortener
+      SHARD2_URL: jdbc:mysql://mysql-shard2:3306/shortener
+      DB_USER: root
+      DB_PASSWORD: root
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      mysql-shard0: { condition: service_healthy }
+      mysql-shard1: { condition: service_healthy }
+      mysql-shard2: { condition: service_healthy }
+      redis: { condition: service_started }
+      kafka: { condition: service_started }
