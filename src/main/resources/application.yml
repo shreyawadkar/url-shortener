@@ -18,7 +18,7 @@ spring:
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
 app:
-  base-url: ${BASE_URL:http://localhost:8080}
+  base-url: ${BASE_URL:${RENDER_EXTERNAL_URL:http://localhost:8080}}
   code-length: 7
 
   # Three MySQL shards. Defaults are in-memory H2 databases in MySQL mode so the app runs with zero setup.
